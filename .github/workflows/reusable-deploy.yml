@@ -36,7 +36,7 @@ jobs:
 
       - name: Run PMD
         run: |
-          pmd check -d force-app -R rulesets/apex/ruleset.xml -f text
+          pmd check -d force-app -R ruleset.xml -f text
 
       - name: Run Deployment
         run: |
