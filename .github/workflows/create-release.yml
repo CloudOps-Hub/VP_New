@@ -18,11 +18,11 @@ jobs:
           fetch-depth: 0
 
       - name: Install GitHub CLI
-        run: |
-         sudo apt-get update
-         sudo apt-get install -y gh
-         gh --version
-         
+        run: sudo apt-get install gh -y
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
       - name: Configure Git
         run: |
           git config user.name "github-actions"
@@ -32,7 +32,17 @@ jobs:
         id: prs
         run: |
           milestone="${{ github.event.inputs.milestone || 'Release-1.0' }}"
-          prs=$(gh pr list --state merged --base qa --milestone "$milestone" --json mergeCommit -q '.[].mergeCommit')
+
+          # Fetch milestone ID
+          milestone_id=$(gh api repos/${{ github.repository }}/milestones \
+            --jq ".[] | select(.title==\"$milestone\") | .number")
+
+          echo "Milestone ID: $milestone_id"
+
+          # Fetch merged PRs with that milestone
+          prs=$(gh api repos/${{ github.repository }}/pulls \
+            --jq ".[] | select(.milestone.number==$milestone_id and .merged_at!=null and .base.ref==\"qa\") | .merge_commit_sha")
+
           echo "prs=$prs" >> $GITHUB_OUTPUT
           echo "milestone=$milestone" >> $GITHUB_OUTPUT
 
@@ -40,9 +50,11 @@ jobs:
         run: |
           release_branch="release/${{ steps.prs.outputs.milestone }}"
           git checkout -b "$release_branch" origin/qa
+
           for sha in ${{ steps.prs.outputs.prs }}; do
             git cherry-pick "$sha" || git cherry-pick --skip
           done
+
           git push origin "$release_branch"
 
       - name: Open PR into SIT
