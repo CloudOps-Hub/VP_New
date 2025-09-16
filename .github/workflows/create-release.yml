@@ -1,0 +1,74 @@
+name: Create Release Branch
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: "Milestone name (e.g. Release-1.0)"
+        required: true
+  schedule:
+    - cron: "0 18 * * 5" # Friday 6 PM UTC
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install GitHub CLI
+        run: sudo apt-get install gh -y
+
+      - name: Authenticate with PAT
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          # Set origin to use PAT
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}
+
+          # Authenticate gh CLI
+          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
+          
+      - name: Fetch PRs with milestone
+        id: prs
+        run: |
+          milestone="${{ github.event.inputs.milestone || 'Release-1.0' }}"
+
+          # Fetch milestone ID
+          milestone_id=$(gh api repos/${{ github.repository }}/milestones \
+            --jq ".[] | select(.title==\"$milestone\") | .number")
+
+          echo "Milestone ID: $milestone_id"
+
+          # Fetch merged PRs with that milestone
+          prs=$(gh api repos/${{ github.repository }}/pulls \
+            --jq ".[] | select(.milestone.number==$milestone_id and .merged_at!=null and .base.ref==\"qa\") | .merge_commit_sha")
+
+          echo "prs=$prs" >> $GITHUB_OUTPUT
+          echo "milestone=$milestone" >> $GITHUB_OUTPUT
+
+      - name: Create release branch
+        run: |
+          release_branch="release/${{ steps.prs.outputs.milestone }}"
+          git checkout -b "$release_branch" origin/qa
+
+          for sha in ${{ steps.prs.outputs.prs }}; do
+            git cherry-pick "$sha" || git cherry-pick --skip
+          done
+
+          git push origin "$release_branch"
+
+      - name: Open PR into SIT
+        run: |
+          release_branch="release/${{ steps.prs.outputs.milestone }}"
+          gh pr create \
+            --base sit \
+            --head "$release_branch" \
+            --title "Release ${{ steps.prs.outputs.milestone }} → SIT" \
+            --body "Automated release branch created targeting SIT."
