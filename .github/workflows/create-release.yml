@@ -1,9 +1,5 @@
 name: Create Release Branch
 
-permissions:
-  contents: write
-  pull-requests: write
-
 on:
   workflow_dispatch:
     inputs:
@@ -24,14 +20,17 @@ jobs:
       - name: Install GitHub CLI
         run: sudo apt-get install gh -y
 
-      - name: Authenticate GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: Configure Git
+      - name: Authenticate with PAT
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
+          # Set origin to use PAT
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}
+
+          # Authenticate gh CLI
+          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
+          
       - name: Fetch PRs with milestone
         id: prs
         run: |
