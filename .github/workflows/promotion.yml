@@ -1,0 +1,44 @@
+name: Promote Release Branch
+
+on:
+  pull_request:
+    branches: [ "sit", "uat", "prod" ]
+    types: [opened, synchronize]
+
+jobs:
+  validate:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      target: ${{ github.base_ref == 'sit' && 'SIT' || github.base_ref == 'uat' && 'UAT' || 'PROD' }}
+      from_ref: ${{ github.event.pull_request.base.sha }}
+      to_ref: ${{ github.event.pull_request.head.sha }}
+      test_level: RunLocalTests
+    secrets: inherit
+
+  auto-promotion:
+    needs: validate
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cli/cli@v2
+
+      - name: Auto-create next PR
+        run: |
+          base="${{ github.base_ref }}"
+          head="${{ github.head_ref }}"
+          next=""
+          if [ "$base" = "sit" ]; then
+            next="uat"
+          elif [ "$base" = "uat" ]; then
+            next="prod"
+          fi
+
+          if [ -n "$next" ]; then
+            gh pr create \
+              --base "$next" \
+              --head "$head" \
+              --title "Promote ${head} → ${next}" \
+              --body "Auto-promotion from $base to $next"
+          else
+            echo "Reached PROD. No further promotion."
+          fi

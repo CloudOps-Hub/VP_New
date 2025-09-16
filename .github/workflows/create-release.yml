@@ -1,0 +1,51 @@
+name: Create Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: "Milestone name (e.g. Release-1.0)"
+        required: true
+  schedule:
+    - cron: "0 18 * * 5" # Friday 6 PM UTC
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: cli/cli@v2
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+      - name: Fetch PRs with milestone
+        id: prs
+        run: |
+          milestone="${{ github.event.inputs.milestone || 'Release-1.0' }}"
+          prs=$(gh pr list --state merged --base qa --milestone "$milestone" --json mergeCommit -q '.[].mergeCommit')
+          echo "prs=$prs" >> $GITHUB_OUTPUT
+          echo "milestone=$milestone" >> $GITHUB_OUTPUT
+
+      - name: Create release branch
+        run: |
+          release_branch="release/${{ steps.prs.outputs.milestone }}"
+          git checkout -b "$release_branch" origin/qa
+          for sha in ${{ steps.prs.outputs.prs }}; do
+            git cherry-pick "$sha" || git cherry-pick --skip
+          done
+          git push origin "$release_branch"
+
+      - name: Open PR into SIT
+        run: |
+          release_branch="release/${{ steps.prs.outputs.milestone }}"
+          gh pr create \
+            --base sit \
+            --head "$release_branch" \
+            --title "Release ${{ steps.prs.outputs.milestone }} → SIT" \
+            --body "Automated release branch created targeting SIT."
