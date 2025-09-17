@@ -1,0 +1,17 @@
+name: PR Validation to QA
+
+on:
+  pull_request:
+    branches: [ "qa" ]
+    paths:
+      - "force-app/**"
+
+jobs:
+  validate:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      target: QA
+      from_ref: ${{ github.event.pull_request.base.sha }}
+      to_ref: ${{ github.event.pull_request.head.sha }}
+      test_level: RunSpecifiedTests
+    secrets: inherit

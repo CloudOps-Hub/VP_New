@@ -1,0 +1,86 @@
+name: Reusable Salesforce Deploy
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+      from_ref:
+        required: true
+        type: string
+      to_ref:
+        required: true
+        type: string
+      test_level:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli
+
+      - name: Installing the SFDX CLI Scanner
+        run: echo 'y' | sf plugins install @salesforce/sfdx-scanner
+
+      # Run SFDX Scanner (HTML report)
+      - name: Run SFDX CLI Scanner
+        run: |
+          mkdir reports
+          sf scanner run -f html \
+            -t "force-app" \
+            -e "eslint,pmd,cpd" \
+            -c "Design,Best Practices,Code Style,Performance,Security" \
+            --outfile reports/scan-reports.html
+
+      # Run Apex PMD Scan (SARIF report)
+      - name: Run PMD scan
+        uses: pmd/pmd-github-action@v2
+        id: pmd
+        with:
+          sourcePath: 'force-app'
+          rulesets: 'ruleset.xml'
+          analyzeModifiedFilesOnly: true
+          format: sarif
+          outputFile: pmd-report.sarif
+
+      - name: Check for PMD violations
+        run: |
+          echo "PMD Violations: ${{ steps.pmd.outputs.violations }}"
+          if [ "${{ steps.pmd.outputs.violations }}" != "0" ]; then
+            echo "PMD violations found!"
+            exit 1
+          fi
+
+      - name: Upload PMD SARIF file
+        if: ${{ steps.pmd.outputs.violations != '0' }}
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: pmd-report.sarif
+
+      - name: Upload CLI Scanner HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-scan-report
+          path: reports/scan-reports.html
+
+      - name: Run Deployment
+        run: |
+          echo "Deploying from ${{ inputs.from_ref }} to ${{ inputs.to_ref }} on ${{ inputs.target }}"
+          sfdx force:source:deploy \
+            -p force-app \
+            -u "${{ inputs.target }}" \
+            -l ${{ inputs.test_level }}
