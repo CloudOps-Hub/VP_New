@@ -6,7 +6,6 @@ public class BankAccountClass {
     Integer count;
     //member method
     //1.create
-    //Test Commit by Dev2
     public BankAccountClass(){
         system.debug('Iam in default cinstructor mode. ');
         ac_no = 0;
@@ -15,7 +14,6 @@ public class BankAccountClass {
         count++;
     }
     //2.Input
-    //Test Commit Dev2
     public void setValues(Integer no,String name,Integer bal){
         ac_no = no;
         ach_name = name;
