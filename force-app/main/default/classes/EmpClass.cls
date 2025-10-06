@@ -29,18 +29,9 @@ public class EmpClass {
     	pf=p;
     	tax=tx;
     }
-    //3.process
-    public void grossSalary(){
-        gross = basic+hra+da;
-    }
-    public void netSalary(){
-        netsal = gross - (pf+tax);
-    }
-    //4.output
+    //3.output
     public void getValues(){
         system.debug('the gross salary is'+ gross);
         system.debug('the net salary is'+ netsal);
-    }
-        
-        
+    }        
 }

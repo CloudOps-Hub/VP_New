@@ -1,0 +1,4 @@
+<apex:page>
+   <h1>Registration Confirmed</h1>
+   <p>Thank you for registering. Please check your email for activation instructions.</p>
+</apex:page>
